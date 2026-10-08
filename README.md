@@ -1,93 +1,140 @@
 # api-Geospatial
 
-## Project Overview
-Geospatial File Measurement API is a production-ready RESTful service built with FastAPI that accepts geospatial files (`.kml` and `.zip` containing Shapefiles), processes their features, manages Coordinate Reference Systems (CRS) dynamically, and calculates physical measurements such as Area (for Polygons) and Length (for LineStrings).
+A production-ready RESTful service built with FastAPI that accepts geospatial files (`.kml` and `.zip` containing Shapefiles), processes their features, dynamically estimates Coordinate Reference Systems (CRS), and calculates physical measurements such as Area (for Polygons) and Length (for LineStrings).
 
-## Features
-- KML upload
-- Shapefile ZIP upload
-- Feature extraction
-- CRS handling
-- Polygon area calculation
-- LineString length calculation
-- Point handling
-- Error handling
-- SQLite persistence
-- API documentation (Swagger)
-- Tests
-- Docker support
+## 🚀 Features
+- **KML & Shapefile Uploads**: Supports robust ingestion of standard geospatial formats.
+- **Dynamic CRS Transformation**: Automatically estimates the correct UTM zone based on geographic bounds using `estimate_utm_crs()`, ensuring accurate physical measurements in meters/kilometers instead of meaningless geographic degrees.
+- **Geometric Calculations**: High-performance area and length calculations powered by Shapely and GeoPandas.
+- **Graceful Error Handling**: Unsupported geometries are handled individually without crashing the entire file processing batch.
+- **Security First**: Prevents Zip Slip (path traversal) attacks and limits file sizes dynamically.
+- **Dockerized**: Fully containerized for easy deployment and scaling.
 
-## Tech Stack
-- **Python 3.11+**: Primary language.
-- **FastAPI**: Modern, fast web framework for building APIs.
-- **Uvicorn**: Lightning-fast ASGI server.
-- **GeoPandas & Shapely**: For robust geospatial data processing and geometric calculations.
-- **PyProj**: For Coordinate Reference System (CRS) transformations.
-- **SQLite & SQLAlchemy**: Relational database mapping and storage.
-- **Pytest**: Testing framework.
-- **Docker**: Containerization.
+---
 
-## Architecture
+## 🏗️ Architecture
+
+```mermaid
+graph TD
+    Client[Client (Browser / Curl)] -->|HTTP POST| API[FastAPI Routes]
+    
+    subgraph Backend Application
+        API --> Validator[File Validator & Security]
+        Validator -->|Valid File| Extractor[GeoPandas Processor]
+        
+        Extractor -->|Identify CRS| CRS[CRS Service]
+        CRS -->|If Geographic| Transform[Estimate UTM & Transform]
+        CRS -->|If Projected| Direct[Keep Original CRS]
+        
+        Transform --> Geometry[Shapely Measurement Engine]
+        Direct --> Geometry
+        
+        Geometry -->|Polygon| Area[Calculate Area m²]
+        Geometry -->|LineString| Length[Calculate Length m]
+    end
+    
+    Area --> DB[(SQLite Database)]
+    Length --> DB
+    
+    DB -->|JSON Payload| Client
+```
+
+---
+
+## 📂 Project Structure
 
 ```text
-Client
-  ↓
-FastAPI
-  ↓
-File Validation
-  ↓
-GeoPandas
-  ↓
-CRS Processing
-  ↓
-Shapely Measurements
-  ↓
-SQLite
-  ↓
-JSON Response
+geospatial-measurement-api/
+├── app/
+│   ├── api/
+│   │   └── routes.py         # FastAPI route definitions
+│   ├── db/
+│   │   ├── database.py       # SQLAlchemy setup and engine
+│   │   └── models.py         # Database models (File metadata, Features)
+│   ├── services/
+│   │   ├── crs.py            # CRS estimation and transformation logic
+│   │   └── file_processor.py # File parsing, geometry extraction & measurement
+│   └── main.py               # FastAPI application entry point
+├── Dockerfile                # Docker container configuration
+├── requirements.txt          # Python dependencies
+└── README.md                 # Project documentation
 ```
 
-## Project Structure
-- `app/api/`: Contains the FastAPI routes.
-- `app/core/`: Configuration and settings.
-- `app/db/`: Database models and session management.
-- `app/schemas/`: Pydantic response models.
-- `app/services/`: Business logic (File processing, CRS handling, Measurements).
-- `tests/`: Pytest suite.
+---
 
-## Installation
+## 🛠️ Tech Stack
+- **Python 3.11+**: Primary language
+- **FastAPI**: Modern, fast web framework
+- **GeoPandas & Shapely**: Geospatial data processing and geometric calculations
+- **PyProj**: Coordinate Reference System handling
+- **SQLite & SQLAlchemy**: Database mapping and persistent storage
+- **Pytest**: Automated testing framework
+- **Docker**: Containerization
 
+---
+
+## 💻 Installation & Setup
+
+### Option 1: Local Virtual Environment
 ```bash
+# 1. Clone the repository
+git clone https://github.com/Satyaprakash1235/api-Geospatial.git
+cd api-Geospatial
+
+# 2. Create and activate a virtual environment
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+
+# 3. Install dependencies
 pip install -r requirements.txt
-```
 
-## Running Locally
-
-```bash
+# 4. Run the API server
 uvicorn app.main:app --reload
 ```
 
-## API Usage
+### Option 2: Docker
+```bash
+# Build the Docker image
+docker build -t geospatial-api .
 
-1. **Upload a File**
+# Run the container
+docker run -p 8000:8000 geospatial-api
+```
+
+Alternatively, using `docker-compose`:
+```bash
+docker-compose up --build
+```
+
+---
+
+## 📡 API Endpoints
+
+Once the application is running, you can explore the interactive Swagger documentation at **[http://localhost:8000/docs](http://localhost:8000/docs)**.
+
+### 1. Upload a File
+```http
+POST /api/files/
+```
+**Description:** Uploads a `.kml` or `.zip` (containing `.shp`, `.shx`, `.dbf`).
+**Curl Example:**
 ```bash
 curl -X POST http://localhost:8000/api/files/ -F "file=@sample.kml"
 ```
 
-2. **Get File Info**
-```bash
-curl -X GET http://localhost:8000/api/files/{id}/
+### 2. Get File Information
+```http
+GET /api/files/{id}/
 ```
+**Description:** Retrieves top-level metadata about a previously uploaded file.
 
-3. **Get File Measurements**
-```bash
-curl -X GET http://localhost:8000/api/files/{id}/measurements/
+### 3. Get Feature Measurements
+```http
+GET /api/files/{id}/measurements/
 ```
+**Description:** Retrieves a detailed breakdown of all features, their extracted properties, dynamic CRS, and geometric measurements.
 
-## Example Response
-
+**Example Response:**
 ```json
 {
   "file_id": "abc12345",
@@ -98,69 +145,28 @@ curl -X GET http://localhost:8000/api/files/{id}/measurements/
     {
       "feature_id": 0,
       "geometry_type": "Polygon",
+      "crs": "EPSG:4326",
       "properties": {
-        "name": "Survey Area"
+        "Name": "Survey Area"
       },
       "measurement": {
         "type": "area",
         "value": 125430.52,
         "unit": "m²"
-      }
+      },
+      "status": "COMPLETED",
+      "message": null
     }
   ]
 }
 ```
 
-## CRS Handling
-Using geographic coordinate systems (like EPSG:4326 - latitude/longitude) directly for area or length measurements results in degrees, which is physically meaningless.
-To properly measure area and distance, the API dynamically determines a projected CRS (Universal Transverse Mercator - UTM) based on the dataset's centroid.
-- If already projected, it uses the input CRS.
-- If geographic, it determines the correct UTM zone and transforms the geometries before measurement.
+---
 
-## Design Decisions
-- **FastAPI**: Provides built-in async capabilities, easy validation with Pydantic, and automatic Swagger docs.
-- **GeoPandas/Shapely**: Industry standard for Python geospatial data handling.
-- **SQLite**: Simple, zero-configuration database perfect for the assignment requirements.
-- **Modular Architecture**: Separates routing from business logic (services) and database interactions, making testing and scaling easier.
+## 🧪 Testing
 
-## Error Handling
-Graceful error handling is implemented via FastAPI HTTPExceptions. 
-Unsupported geometries inside a dataset will result in a null measurement with a message, rather than failing the whole file. Missing CRS, invalid ZIPs, and unsupported extensions all return clear 400 Bad Request responses.
-
-## Security
-- **ZIP Validation and Zip Slip**: The extraction process prevents Zip Slip path traversal attacks by validating member filenames.
-- **Safe Extraction**: Files are extracted to a temporary directory context.
-- **File Size Limits**: Max upload sizes are configurable to avoid overwhelming the server.
-- **Error Obfuscation**: Internal stack traces are logged but not exposed to API clients.
-
-## Testing
-Run tests using:
+To run the automated test suite, execute:
 ```bash
 pytest
 ```
-
-## Docker
-
-Build image:
-```bash
-docker build -t geospatial-measurement-api .
-```
-
-Run container:
-```bash
-docker run -p 8000:8000 geospatial-measurement-api
-```
-
-Alternatively using docker-compose:
-```bash
-docker-compose up --build
-```
-
-## Learning
-This project demonstrates applying robust Backend Software Engineering principles to Geospatial data. It includes handling complex geometries, understanding EPSG projections vs geographic coordinate systems, preventing path traversal attacks, and utilizing modern async Python capabilities with FastAPI.
-
-## Future Scope
-- Support for GeoJSON and GeoPackage.
-- Move to PostGIS for database-level spatial operations.
-- Integrate Celery and Redis for asynchronous background processing.
-- Add user authentication and rate limiting.
+This suite covers API integrations, missing CRS scenarios, corrupted ZIP prevention, and geometry validations.
