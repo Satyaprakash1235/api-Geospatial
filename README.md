@@ -173,6 +173,32 @@ This suite covers API integrations, missing CRS scenarios, corrupted ZIP prevent
 
 ---
 
+## 🧠 Technical Decisions & Trade-offs
+
+During the development of this API, several key architectural and technical decisions were made to prioritize performance, accuracy, and maintainability:
+
+### 1. Choice of Web Framework: FastAPI vs. Flask/Django
+- **Decision:** Used **FastAPI**.
+- **Alternative Considered:** Flask or Django.
+- **Reasoning:** Geospatial file processing can be computationally heavy. FastAPI's native async support allows the server to handle concurrent requests more efficiently. Furthermore, FastAPI's built-in Pydantic data validation automatically ensures that our JSON responses perfectly match the required schema without writing boilerplate serialization code.
+
+### 2. Geometry Engine: GeoPandas & Shapely vs. GDAL/Fiona
+- **Decision:** Used **GeoPandas** backed by **Shapely**.
+- **Alternative Considered:** Writing raw GDAL/Fiona bindings or using PostGIS.
+- **Reasoning:** GeoPandas provides a high-level, Pythonic DataFrame API that makes reading complex vector files (like Shapefiles or KMLs) incredibly simple in just a few lines of code. It natively integrates with Shapely for geometric operations (area, length) and PyProj for coordinate transformations, abstracting away the extreme complexity of raw C-bindings found in GDAL.
+
+### 3. Dynamic CRS Resolution Strategy
+- **Decision:** Implemented `gdf.estimate_utm_crs()` for dynamic geographic-to-projected coordinate transformations.
+- **Alternative Considered:** Hardcoding a specific projection (e.g., Web Mercator EPSG:3857) or asking the user to manually provide a target CRS.
+- **Reasoning:** Calculating area or length on a Geographic CRS (like WGS84 / EPSG:4326) yields meaningless results (degrees instead of meters). Web Mercator severely distorts area calculations away from the equator. By dynamically estimating the correct UTM (Universal Transverse Mercator) zone based on the data's bounding box, we guarantee highly accurate physical measurements anywhere on Earth without requiring the user to possess deep geospatial knowledge.
+
+### 4. Handling Corrupted or Malicious Zips
+- **Decision:** In-memory ZIP extraction with strict file extension filtering and path traversal prevention.
+- **Alternative Considered:** Extracting files directly to a temporary directory blindly.
+- **Reasoning:** To prevent "Zip Slip" vulnerabilities, the API strictly checks that the unzipped paths do not contain absolute paths or parent directory references (`..`). It explicitly requires the presence of `.shp`, `.shx`, and `.dbf` to validate the integrity of a Shapefile before attempting to process it, reducing the chance of server crashes from malformed data.
+
+---
+
 ## 🌟 Real-World Applications
 
 This Geospatial API is designed to solve complex geographic calculation problems with zero setup required by end-users. It can be used for:
