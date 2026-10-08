@@ -16,24 +16,24 @@ A production-ready RESTful service built with FastAPI that accepts geospatial fi
 
 ```mermaid
 graph TD
-    Client[Client (Browser / Curl)] -->|HTTP POST| API[FastAPI Routes]
+    Client["Client (Browser / Curl)"] -->|HTTP POST| API["FastAPI Routes"]
     
     subgraph Backend Application
-        API --> Validator[File Validator & Security]
-        Validator -->|Valid File| Extractor[GeoPandas Processor]
+        API --> Validator["File Validator & Security"]
+        Validator -->|Valid File| Extractor["GeoPandas Processor"]
         
-        Extractor -->|Identify CRS| CRS[CRS Service]
-        CRS -->|If Geographic| Transform[Estimate UTM & Transform]
-        CRS -->|If Projected| Direct[Keep Original CRS]
+        Extractor -->|Identify CRS| CRS["CRS Service"]
+        CRS -->|If Geographic| Transform["Estimate UTM & Transform"]
+        CRS -->|If Projected| Direct["Keep Original CRS"]
         
-        Transform --> Geometry[Shapely Measurement Engine]
+        Transform --> Geometry["Shapely Measurement Engine"]
         Direct --> Geometry
         
-        Geometry -->|Polygon| Area[Calculate Area m²]
-        Geometry -->|LineString| Length[Calculate Length m]
+        Geometry -->|Polygon| Area["Calculate Area m²"]
+        Geometry -->|LineString| Length["Calculate Length m"]
     end
     
-    Area --> DB[(SQLite Database)]
+    Area --> DB[("SQLite Database")]
     Length --> DB
     
     DB -->|JSON Payload| Client
